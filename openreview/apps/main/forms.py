@@ -2,10 +2,12 @@ from django import forms
 from django.forms import widgets, ValidationError
 from django.utils.html import mark_safe
 from django.core.exceptions import ObjectDoesNotExist
-from openreview.apps.main.models import Author, Keyword
+from openreview.apps.main.models import Author, Keyword, Category
 
 from openreview.apps.main.models.review import Review
 from openreview.apps.main.models.paper import Paper
+
+from django.utils.functional import lazy, memoize
 
 
 class StarInput(forms.TextInput):
@@ -67,15 +69,24 @@ class CommentForm(forms.ModelForm):
         fields = ['text']
 
 
+def _get_category_list():
+    roots = Category.objects.filter(parent=None)
+    return [(root.name, tuple(root.children.values_list("id", "name"))) for root in roots]
+
+# Cache version of _get_category_list
+get_category_list = memoize(_get_category_list, cache={}, num_args=0)
+
+
 class PaperForm(forms.ModelForm):
-    type_choices = [('',"Select an item"),
-                    ('doi',"Digital object identifier"),
-                    ('arxiv',"arXiv identifier"),
-                    ('manually',"Manually")]
+    type_choices = [('', "Select an item"),
+                    ('doi', "Digital object identifier"),
+                    ('arxiv', "arXiv identifier"),
+                    ('manually', "Manually")]
 
     type = forms.ChoiceField(choices=type_choices, help_text="Select an option")
     authors = forms.CharField(widget=widgets.Textarea(), help_text="Authors of this paper, separated with a newline.")
     keywords = forms.CharField(widget=widgets.Textarea(), help_text="Keywords, separated with a comma.", required=False)
+    categories = forms.MultipleChoiceField(choices=(), help_text="Select one or multiple categories.", required=False)
 
     def __init__(self, *args, **kwargs):
         super(PaperForm, self).__init__(*args, **kwargs)
@@ -88,6 +99,7 @@ class PaperForm(forms.ModelForm):
         self.fields["doc_id"].widget = widgets.TextInput()
         self.fields["publisher"].widget = widgets.TextInput()
         self.fields["keywords"].widget = widgets.TextInput()
+        self.fields["categories"].choices = get_category_list()
 
     # TODO: clean_{authors,keywords} use the same algorithm. Generalise?
     def clean_authors(self):
@@ -130,11 +142,12 @@ class PaperForm(forms.ModelForm):
                         keyword.save()
                 paper.keywords.add(*self.cleaned_data["keywords"])
 
+                paper.categories.add(*self.cleaned_data["categories"])
             return paper
 
     class Meta:
         model = Paper
         fields = [
             'type', 'title', 'doc_id', 'authors', 'abstract', 'keywords',
-            'publisher', 'publish_date', 'urls'
+            'publisher', 'publish_date', 'urls', 'categories'
         ]
