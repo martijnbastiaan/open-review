@@ -1,24 +1,23 @@
 from datetime import date
 import os
-from unittest import TestCase
-from django.core.management import call_command
 
+from django.core.management import call_command
 from django.core.urlresolvers import reverse
 from django.core.cache import cache
 from django.test.client import Client
 
 from openreview.apps.main.forms import PaperForm
 from openreview.apps.tools.testing import SeleniumTestCase, create_test_keyword, assert_max_queries
+from openreview.apps.tools.testing import BaseTestCase
 from openreview.apps.tools.testing import create_test_author, create_test_user
-from openreview.apps.main.models import Paper, Review, Vote, Category
-
+from openreview.apps.main.models import Paper, Review, Vote
 from openreview.apps.papers import scrapers
 
 
 __all__ = ["TestReviewForm", "TestReviewFormLive"]
 
 
-class TestReviewForm(TestCase):
+class TestReviewForm(BaseTestCase):
     def setUp(self):
         call_command("loaddata", "initial_data", verbosity=0)
 
@@ -143,6 +142,7 @@ relativistic electrons.\n""")
 
 class TestReviewFormLive(SeleniumTestCase):
     def setUp(self):
+        call_command("loaddata", "initial_data", verbosity=0)
         self.a = create_test_author(name="tester")
         self.u = create_test_user()
         super().setUp()

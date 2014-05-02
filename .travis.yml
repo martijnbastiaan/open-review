@@ -5,6 +5,7 @@ node_js: "0.10"
 services:
  - postgresql
  - memcached
+ - elasticsearch
 
 virtualenv:
   system_site_packages: true
@@ -41,3 +42,6 @@ script:
 after_success:
  - coverage report -m
  - coveralls
+
+branches:
+  except: base-design
