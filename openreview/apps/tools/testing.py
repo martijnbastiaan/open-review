@@ -8,19 +8,23 @@ from contextlib import contextmanager
 from functools import wraps
 import functools
 import unittest
+import haystack
 from datetime import datetime
 from logging import getLogger
 
 from django.conf import settings
 from django.core.urlresolvers import reverse
+from django.core.management import call_command
 from django.db import connection
-from django.test import LiveServerTestCase
+from django.test import LiveServerTestCase, SimpleTestCase
+from django.test.utils import override_settings
+
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.support.wait import WebDriverWait
 
 from openreview.apps.accounts.models import User
-from openreview.apps.main.models import Author, Paper, Keyword, Review, Vote
-from openreview.settings import get_bool
+from openreview.apps.main.models import Author, Paper, Keyword, Review, Vote, Category
+from openreview.apps.tools.string import get_bool
 
 log = getLogger(__name__)
 
@@ -57,6 +61,19 @@ same_browser = functools.partial(get_bool, "SELENIUM_SAME_BROWSER", False)
 if not skip() and same_browser():
     WEBDRIVER = SeleniumWebDriver()
 
+
+@override_settings(HAYSTACK_CONNECTIONS=settings.HAYSTACK_TESTING_CONNECTIONS)
+class BaseTestCase(SimpleTestCase):
+
+    def setUp(self):
+        haystack.connections.reload('default')
+        super(BaseTestCase,self).setUp()
+
+    def tearDown(self):
+        call_command('clear_index', interactive=False, verbosity=0)
+
+
+@override_settings(HAYSTACK_CONNECTIONS=settings.HAYSTACK_CONNECTIONS)
 class SeleniumTestCase(LiveServerTestCase):
     """TestCase for in-browser testing. Sets up `wd` property, which is an initialised Selenium
     webdriver (defaults to Firefox)."""
@@ -74,10 +91,16 @@ class SeleniumTestCase(LiveServerTestCase):
     def wd(self):
         return WEBDRIVER if same_browser() else self._wd
 
+    def setUp(self):
+        haystack.connections.reload('default')
+        super().setUp()
+
     def tearDown(self):
         if not skip():
             self.wd.delete_all_cookies()
+        call_command('clear_index', interactive=False, verbosity=0)
         super().tearDown()
+
 
     @classmethod
     def setUpClass(cls):
@@ -143,8 +166,12 @@ def create_test_keyword(label="keyword - %s"):
     return Keyword.objects.create(label=label % COUNTER)
 
 @up_counter
-def create_test_paper(n_authors=0, n_keywords=0, n_comments=0, n_reviews=0, **kwargs):
+def create_test_paper(n_authors=0, n_keywords=0, n_comments=0, n_reviews=0, n_categories=0, **kwargs):
     paper = Paper.objects.create(**dict({"title": "paper-%s" % COUNTER, "abstract": "abstract"}, **kwargs))
+
+    if n_categories > 0:
+        for i in range(n_categories):
+            paper.categories.add(create_test_category())
 
     if n_authors > 0:
         for i in range(n_authors):
@@ -224,6 +251,16 @@ def create_test_votes(counts=None, review=None):
             create_test_vote(review=review, vote=vote)
 
     return review
+
+@up_counter
+def create_test_category(**kwargs):
+    category = Category(**dict({
+        "name": "category-%s" % COUNTER,
+        "arxiv_code": "arxiv-%s" % COUNTER,
+        "parent": None
+    }, **kwargs))
+    category.save(test_environment=True)
+    return category
 
 @contextmanager
 def assert_max_queries(n=0):

@@ -5,6 +5,7 @@ node_js: "0.10"
 services:
  - postgresql
  - memcached
+ - elasticsearch
 
 virtualenv:
   system_site_packages: true

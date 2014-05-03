@@ -1,14 +1,15 @@
-import unittest
-
 from django.core.urlresolvers import reverse
 from django.test import Client
 from selenium.common.exceptions import NoSuchElementException
 
+from openreview.apps.tools.testing import BaseTestCase
 from openreview.apps.tools.testing import create_test_paper, assert_max_queries, create_test_user, SeleniumTestCase
+
 
 __all__ = ["TestPaperWithReviewsView", "TestPaperViewLive"]
 
-class TestPaperWithReviewsView(unittest.TestCase):
+
+class TestPaperWithReviewsView(BaseTestCase):
     def setUp(self):
         self.paper = create_test_paper(2, 2, 2, 2)
         self.client = Client()
@@ -23,6 +24,7 @@ class TestPaperWithReviewsView(unittest.TestCase):
 
         with assert_max_queries(n=9):
             self.client.get(reverse("paper", args=[self.paper.id]))
+
 
 class TestPaperViewLive(SeleniumTestCase):
     def test_new_review(self):
